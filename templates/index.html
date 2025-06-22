@@ -1,0 +1,156 @@
+<html>
+<head>
+    <title>Demo</title>
+    <link rel="stylesheet" href="/s/style.css">
+</head>
+<body>
+<h1>Authentication service</h1>
+<p>
+    <div id="status"></div>
+</p>
+<p>
+    <button id="login">Login</button>
+</p>
+
+<p>
+    <button id="logout" style="display:none">Logout</button>
+</p>
+
+
+<script async type="module">
+    console.log("script async module loading...")
+    import {
+        parseRequestOptionsFromJSON,
+        create,
+        get,
+    } from "/webauthn.js";
+
+    async function loginFlow() {
+        console.log("login flow initiating")
+        let authenticatorAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        let mediationAvailable = await PublicKeyCredential.isConditionalMediationAvailable();
+
+        if (!authenticatorAvailable) {
+            status("passkey authenticator not available");
+            // return
+        }
+        if (!mediationAvailable) {
+            status("conditional mediation not available");
+            // return
+        }
+
+        // console.log("request fullscreen")
+        // let fs = await document.getElementsByTagName("body")[0].requestFullscreen();
+
+        // console.log("fs:", fs)
+
+        let foo;
+        try {
+            foo = await fetch("/login/begin", {
+                method: "POST",
+            });
+            if (!foo.ok) {
+                status("login could not initialized")
+                return;
+            }
+        } catch (e) {
+            console.log("fetch failure:", e)
+            status("could not fetch login info")
+            return
+        }
+
+        let loginData = await foo.json();
+        status("authentication challenge: " + loginData.publicKey.challenge);
+
+        console.log("login data:", loginData)
+        console.log("authenticating...")
+
+
+        let result;
+        try {
+            let publicKey = parseRequestOptionsFromJSON(loginData);
+            // console.log("opts:", {publicKey})
+            result = await get(publicKey);
+        } catch (e) {
+            status("cred get failed: " + e)
+            return
+        }
+        console.log("authentication data:", result)
+
+        let res;
+        try {
+            let body = JSON.stringify(result);
+            console.log("sending body:", body)
+            res = await fetch("/login/finish", {
+                method: "POST",
+                body: body,
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+        } catch(e) {
+            status("failure to post: "+e)
+        }
+        console.log("login post:", res)
+        let finishData = await res.json();
+
+        if(res.ok) {
+            status("login data sent successfully")
+            console.log("posting to window.top, message:", finishData.token)
+            // console.log("top window:", window.top)
+            window.top.postMessage(finishData.token, "*")
+            status("login was successful")
+        } else {
+            status("login failure, response not ok")
+            if (finishData.error) {
+                status(finishData.error);
+            }
+            if (res.status === 404) {
+                const js = await res.json();
+                if (js.credentialRemoved) {
+                    console.log("got status 404, try to delete credential, cred id:", result.id)
+                    let signalRet = await PublicKeyCredential.signalUnknownCredential({
+                        rpId: loginData.publicKey.rpId,
+                        credentialId: result.id,
+                    });
+                }
+            }
+        }
+    }
+
+
+    async function status(text) {
+        console.log("new status:", text)
+        // let old =  document.getElementById("status").innerHTML;
+        // document.getElementById("status").innerHTML = `${old}<p>${text}</p>`;
+        document.getElementById("status").innerHTML = text;
+    }
+
+
+    document.getElementById("login").onclick = () => { loginFlow() };
+    document.getElementById("logout").onclick = () => { window.location = "/logout" };
+
+    let capabilities = await PublicKeyCredential.getClientCapabilities();
+    // console.log("conditional get available: ", capabilities.conditionalGet);
+    // console.log("passkey platform auth available: ", capabilities.passkeyPlatformAuthenticator);
+
+    status(`cond. get ${capabilities.conditionalGet}, pk plat auth ${capabilities.passkeyPlatformAuthenticator}`);
+    // loginFlow();
+
+
+    // window.top.postMessage({"uid": "foobar"}, "*");
+
+    console.log(`script async module loaded! (sync script loaded ${typeof syncLoaded !== "undefined"}, dom loaded ${typeof domLoaded !== "undefined"})`)
+
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded",  (event) => {
+        domLoaded = true;
+        console.log("DOM fully loaded and parsed");
+        // loginFlow();
+    });
+    syncLoaded = true;
+</script>
+</body>
+</html>
