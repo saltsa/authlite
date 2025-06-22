@@ -16,9 +16,8 @@ import (
 
 var tlsCert *tls.Certificate
 var tlsLock sync.Mutex
-var only sync.Once
 
-const certLifeTime = 16 * time.Minute
+const certLifeTime = 16 * time.Hour
 
 func ProvideTLSCertificate(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	tlsLock.Lock()
@@ -36,10 +35,13 @@ func ProvideTLSCertificate(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		}
 
 		go func() {
-			time.Sleep(certLifeTime - 15*time.Minute)
-			slog.Default().Info("certificate soon expiring, forcing new key and cert")
+			sleepTime := certLifeTime - 15*time.Minute
+			log.Printf("cert will be renewed in %s", sleepTime)
+			time.Sleep(sleepTime)
+
 			tlsLock.Lock()
 			defer tlsLock.Unlock()
+			slog.Default().Info("certificate is expiring")
 			tlsCert = nil
 		}()
 	}

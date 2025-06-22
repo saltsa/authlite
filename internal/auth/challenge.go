@@ -21,7 +21,7 @@ type ChallengeEntry struct {
 	ID          uuid.UUID
 	Challenge   []byte
 	sessionData *webauthn.SessionData
-	Created     time.Time
+	Created     time.Time // TODO: To be removed because we're using ID. Left for now.
 }
 
 func (cu *ChallengeEntry) AddSessionData(sd *webauthn.SessionData) {
@@ -34,7 +34,8 @@ func (cu *ChallengeEntry) GetSessionData() (sd *webauthn.SessionData) {
 
 func (cu *ChallengeEntry) Expired() (expired bool) {
 	if cu != nil {
-		if age := time.Since(cu.Created); age > challengeExpireTime {
+		created := time.Unix(cu.ID.Time().UnixTime())
+		if age := time.Since(created); age > challengeExpireTime {
 			return true
 		}
 	}

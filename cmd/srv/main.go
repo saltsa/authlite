@@ -105,18 +105,19 @@ func main() {
 		json.NewEncoder(w).Encode(response)
 	})
 
+	validPaths := map[string]string{
+		"/":            "templates/index.html",
+		"/webauthn.js": "",
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fp := "templates" + r.URL.Path
-		if r.URL.Path == "/" {
-			fp = "templates/index.html"
-		} else if r.URL.Path != "/webauthn.js" {
+		if fp, ok := validPaths[r.URL.Path]; ok {
+			if fp == "" {
+				fp = "templates" + r.URL.Path
+			}
+			http.ServeFileFS(w, r, authlite.WebRoot, fp)
+		} else {
 			http.Error(w, "not found", http.StatusNotFound)
-			return
 		}
-
-		logger.Printf("%s %s %s", r.Method, r.RequestURI, r.UserAgent())
-
-		http.ServeFileFS(w, r, authlite.WebRoot, fp)
 	})
 
 	logger.Fatal(srv.ListenAndServeTLS("", ""))
