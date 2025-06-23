@@ -31,12 +31,12 @@
         let mediationAvailable = await PublicKeyCredential.isConditionalMediationAvailable();
 
         if (!authenticatorAvailable) {
-            status("passkey authenticator not available");
-            return;
+            console.log("passkey authenticator not available");
+            // return;
         }
         if (!mediationAvailable) {
-            status("conditional mediation not available");
-            return;
+            console.log("conditional mediation not available");
+            // return;
         }
 
         // console.log("request fullscreen")
