@@ -1,7 +1,7 @@
 <html>
 <head>
-    <title>Demo</title>
-    <link rel="stylesheet" href="/s/style.css">
+    <title>Passkey authentication</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <h1>Authentication service</h1>
@@ -32,11 +32,11 @@
 
         if (!authenticatorAvailable) {
             status("passkey authenticator not available");
-            // return
+            return;
         }
         if (!mediationAvailable) {
             status("conditional mediation not available");
-            // return
+            return;
         }
 
         // console.log("request fullscreen")
@@ -60,21 +60,19 @@
         }
 
         let loginData = await foo.json();
-        status("authentication challenge: " + loginData.publicKey.challenge);
-
-        console.log("login data:", loginData)
-        console.log("authenticating...")
-
+        console.log("login challenge:", loginData.publicKey.challenge)
 
         let result;
         try {
             let publicKey = parseRequestOptionsFromJSON(loginData);
-            // console.log("opts:", {publicKey})
             result = await get(publicKey);
         } catch (e) {
-            status("cred get failed: " + e)
+            status("failure to init authentication")
+            console.log("cred get failed: " + e)
             return
         }
+        status("login init successful")
+
         console.log("authentication data:", result)
 
         let res;
@@ -92,23 +90,25 @@
         } catch(e) {
             status("failure to post: "+e)
         }
+
+        status("login data sent successfully")
+
         console.log("login post:", res)
         let finishData = await res.json();
 
         if(res.ok) {
-            status("login data sent successfully")
             console.log("posting to window.top, message:", finishData.token)
             // console.log("top window:", window.top)
             window.top.postMessage(finishData.token, "*")
-            status("login was successful")
+            status(`login was successful!`)
         } else {
-            status("login failure, response not ok")
+            status("login failure")
             if (finishData.error) {
                 status(finishData.error);
             }
             if (res.status === 404) {
-                const js = await res.json();
-                if (js.credentialRemoved) {
+                if (finishData.credentialRemoved) {
+                    status("login failure, credential does not exists. Removing it.")
                     console.log("got status 404, try to delete credential, cred id:", result.id)
                     let signalRet = await PublicKeyCredential.signalUnknownCredential({
                         rpId: loginData.publicKey.rpId,
@@ -135,7 +135,9 @@
     // console.log("conditional get available: ", capabilities.conditionalGet);
     // console.log("passkey platform auth available: ", capabilities.passkeyPlatformAuthenticator);
 
-    status(`cond. get ${capabilities.conditionalGet}, pk plat auth ${capabilities.passkeyPlatformAuthenticator}`);
+    console.log(`cond. get ${capabilities.conditionalGet}, pk plat auth ${capabilities.passkeyPlatformAuthenticator}`);
+
+    status("ready to login")
     // loginFlow();
 
 

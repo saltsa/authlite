@@ -6,6 +6,7 @@ require (
 	github.com/go-webauthn/webauthn v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.5
+	github.com/joho/godotenv v1.5.1
 )
 
 require (

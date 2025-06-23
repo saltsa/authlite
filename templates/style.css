@@ -1,0 +1,19 @@
+body {
+    background: linear-gradient(145deg, #3a5fcd, #1e3a8a);
+    font-family: "Verdana";
+    text-align: center;
+    color: #eeeeee;
+}
+
+button {
+    font-size: 40px;
+    padding: 20px;
+    margin: 20px;
+    background-color: #1d2576;
+    border-radius: 10px;
+    color: #eeeeee;
+}
+
+div {
+    font-size: 40px;
+}

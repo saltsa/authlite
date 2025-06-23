@@ -16,13 +16,14 @@ import (
 var logger = applog.GetLogger()
 
 func WebauthConfig() *webauthn.WebAuthn {
-	rpid := util.MustGetEnv("RPID")
-	rpidName := util.MustGetEnv("RPID_NAME", "dummy display name")
+	rpID := util.MustGetEnv("RPID")
+	rpName := util.MustGetEnv("RPID_NAME", "dummy display name")
+	rpOrigin := util.MustGetEnv("RPID_ORIGIN", "https://"+rpID)
 
 	wn, err := webauthn.New(&webauthn.Config{
-		RPID:          rpid,
-		RPDisplayName: rpidName,
-		RPOrigins:     []string{"https://" + rpid},
+		RPID:          rpID,
+		RPDisplayName: rpName,
+		RPOrigins:     []string{rpOrigin},
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			// RequireResidentKey: &requireResident,
 			ResidentKey:      protocol.ResidentKeyRequirementRequired,
@@ -61,11 +62,11 @@ func UserHandler(rawID, userHandle []byte) (webauthn.User, error) {
 		logger.Printf("user handle: %s", uUser)
 		return getW6NUser(uUser)
 	}
-	if len(rawID) == 16 {
-		uUser := uuid.UUID(rawID)
-		logger.Printf("user rawid: %s", uUser)
-		return nil, errors.New("not implemented")
-	}
+	// if len(rawID) == 16 {
+	// 	uUser := uuid.UUID(rawID)
+	// 	logger.Printf("user rawid: %s", uUser)
+	// 	return nil, errors.New("not implemented")
+	// }
 	return nil, ErrUserNotFound
 }
 
