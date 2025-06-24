@@ -24,20 +24,16 @@ const (
 )
 
 func init() {
-	// handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-	// 	Level: slog.LevelDebug,
-	// })
-
 	level := &slog.LevelVar{}
-	handler := newJSONHandler(os.Stderr, &slog.HandlerOptions{
+	level.UnmarshalText([]byte(os.Getenv("LOG_LEVEL")))
+	handler := newLogHandler(os.Stderr, &slog.HandlerOptions{
 		Level: level,
 	})
-
 	slogger = slog.New(handler)
 	logger = slog.NewLogLogger(handler, slog.LevelDebug)
-
 	slog.SetDefault(slogger)
-	logger.Printf("logging initialized")
+
+	slog.Info("logging initialized", "level", level)
 
 	// support dynamic level changes with SIGUSR1 signal
 	sigs := make(chan os.Signal, 1)
@@ -51,8 +47,7 @@ func init() {
 			} else {
 				newLevel = slog.LevelDebug
 			}
-
-			slog.Info("changing log levels", "signal", sig.String(), "newLevel", newLevel.String())
+			slog.Info("changing log levels", "signal", sig.String(), "newLevel", newLevel, "oldLevel", level)
 			level.Set(newLevel)
 		}
 	}()
@@ -79,16 +74,16 @@ func auditAttrs(op AuditOperation) slog.Attr {
 	return attr
 }
 
-type jsonHandler struct {
+type appLogHandler struct {
 	*slog.JSONHandler
 }
 
-func newJSONHandler(w io.Writer, opts *slog.HandlerOptions) *jsonHandler {
+func newLogHandler(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
 	parent := slog.NewJSONHandler(w, opts)
-	return &jsonHandler{parent}
+	return &appLogHandler{parent}
 }
 
-func (h *jsonHandler) Handle(ctx context.Context, r slog.Record) error {
+func (h *appLogHandler) Handle(ctx context.Context, r slog.Record) error {
 	r.AddAttrs(getAdditionalAttrs(ctx)...)
 	return h.JSONHandler.Handle(ctx, r)
 }
