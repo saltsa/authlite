@@ -7,6 +7,9 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/saltsa/authlite/internal/constants"
 )
@@ -27,8 +30,9 @@ func init() {
 	// 	Level: slog.LevelDebug,
 	// })
 
+	level := &slog.LevelVar{}
 	handler := newJSONHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: level,
 	})
 
 	slogger = slog.New(handler)
@@ -36,6 +40,24 @@ func init() {
 
 	slog.SetDefault(slogger)
 	logger.Printf("logging initialized")
+
+	// support dynamic level changes with SIGUSR1 signal
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGUSR1)
+
+	go func() {
+		for sig := range sigs {
+			var newLevel slog.Level
+			if level.Level() == slog.LevelDebug {
+				newLevel = slog.LevelInfo
+			} else {
+				newLevel = slog.LevelDebug
+			}
+
+			slog.Info("changing log levels", "signal", sig.String(), "newLevel", newLevel.String())
+			level.Set(newLevel)
+		}
+	}()
 }
 
 func GetLogger() *log.Logger {
@@ -43,27 +65,28 @@ func GetLogger() *log.Logger {
 }
 
 func LogAuditEvent(ctx context.Context, op AuditOperation, msg string, args ...any) {
+	func() {
+		start := time.Now()
+		defer func() {
+			fmt.Printf("log took %s\n", time.Since(start))
+		}()
+	}()
 	args = append(args, auditAttrs(op))
-	slog.InfoContext(ctx, msg, args...)
+	slogger.InfoContext(ctx, msg, args...)
 }
 
 func auditAttrs(op AuditOperation) slog.Attr {
-	attr := slog.String("operation", string(op))
+	attr := slog.String("event", string(op))
 	return attr
+}
+
+type jsonHandler struct {
+	*slog.JSONHandler
 }
 
 func newJSONHandler(w io.Writer, opts *slog.HandlerOptions) *jsonHandler {
 	parent := slog.NewJSONHandler(w, opts)
-	return &jsonHandler{*parent}
-}
-
-type jsonHandler struct {
-	slog.JSONHandler
-}
-
-func (h *jsonHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	fmt.Println("with attrs")
-	return h.JSONHandler.WithAttrs(attrs)
+	return &jsonHandler{parent}
 }
 
 func (h *jsonHandler) Handle(ctx context.Context, r slog.Record) error {

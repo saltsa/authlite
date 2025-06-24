@@ -5,12 +5,19 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"encoding/json"
 
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/saltsa/authlite"
 	"github.com/saltsa/authlite/applog"
@@ -38,7 +45,7 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	srv := &http.Server{
-		Addr:      "localhost:" + util.MustGetEnv("PORT", "5021"),
+		Addr:      ":" + util.MustGetEnv("PORT", "5021"),
 		TLSConfig: tlsConfig,
 		Handler:   setMiddleware(mux),
 	}
@@ -62,13 +69,36 @@ func main() {
 		}
 	})
 
+	// graceful shutdown setup for SIGTERM
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		err := srv.Shutdown(context.Background())
+		if err != nil {
+			slog.Error("shutdown was not clean", "error", err)
+			return
+		}
+		slog.Info("server successfully shutdown")
+		wg.Done()
+	}()
+
+	// listen
+	var err error
 	if util.GetEnvBool("SKIP_TLS") {
-		logger.Printf("listen HTTP at %s", srv.Addr)
-		logger.Print(srv.ListenAndServe())
-		return
+		slog.Info("start listening", "proto", "HTTP", "addr", srv.Addr)
+		err = srv.ListenAndServe()
+	} else {
+		slog.Info("start listening", "proto", "HTTPS", "addr", srv.Addr)
+		err = srv.ListenAndServeTLS("", "")
 	}
-	logger.Printf("listen HTTPS at %s", srv.Addr)
-	logger.Print(srv.ListenAndServeTLS("", ""))
+	slog.Info("server listen stopped", "error", err)
+	close(sigs)
+
+	// wait for graceful shutdown
+	wg.Wait()
 }
 
 func respondError(w http.ResponseWriter, status int, msg string, err error) {
@@ -86,11 +116,18 @@ func respondError(w http.ResponseWriter, status int, msg string, err error) {
 
 func setMiddleware(next http.Handler) http.Handler {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Printf("--- request method=%s uri=%s host=%s remote=%s", r.Method, r.RequestURI, r.Host, r.RemoteAddr)
+		for hdr := range r.Header {
+			logger.Printf("%s -> %s", hdr, r.Header.Get(hdr))
+		}
+		logger.Printf("--- header list end")
+
 		// skip get and options methods as we're not interested about them
 		if r.Method == http.MethodGet || r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return
 		}
+		start := time.Now()
 
 		ctx := r.Context()
 
@@ -115,8 +152,13 @@ func setMiddleware(next http.Handler) http.Handler {
 			ctx = context.WithValue(ctx, constants.CtxAuthID, cookie.Value)
 		}
 
+		ctx = context.WithValue(ctx, constants.CtxUserAgent, r.UserAgent())
+
 		newReq := r.WithContext(ctx)
 		next.ServeHTTP(w, newReq)
+		end := time.Now()
+
+		logger.Printf("%s %s (ms=%d)", r.Method, r.RequestURI, end.Sub(start).Milliseconds())
 	})
 
 	return handler
@@ -171,15 +213,25 @@ func loginFinishHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	credential, err := w6nConfig.FinishDiscoverableLogin(auth.UserHandler, *challengeEntry.GetSessionData(), r)
+	parsedResponse, err := protocol.ParseCredentialRequestResponse(r)
 	if err != nil {
-		applog.LogAuditEvent(r.Context(), applog.AuditLoginfailed, "login failure", "error", err)
-		respondError(w, http.StatusForbidden, "failed to log user in", err)
+		applog.LogAuditEvent(r.Context(), applog.AuditLoginfailed, "login finish failed to parse response", "error", err)
+		respondError(w, http.StatusBadRequest, "failed to parse response", err)
+		return
+	}
+
+	user, credential, err := w6nConfig.ValidatePasskeyLogin(auth.UserHandler, *challengeEntry.GetSessionData(), parsedResponse)
+	if err != nil {
+		applog.LogAuditEvent(r.Context(), applog.AuditLoginfailed, "validating login failed", "error", err)
+		respondError(w, http.StatusForbidden, "login failed", err)
 		return
 	}
 
 	applog.LogAuditEvent(r.Context(), applog.AuditLoginSuccess, "login successful")
+
 	_ = credential
+
+	logger.Printf("user: %x", user.WebAuthnID())
 
 	w.Header().Set("content-type", "application json")
 	w.WriteHeader(http.StatusOK)

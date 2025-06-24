@@ -10,3 +10,7 @@ First build the app `go build ./cmd/srv/...`. Then run it.
 
 * `RPID` the Relying Party, must be set to the domain this app is running
 * `PORT` port to listen at localhost, defaults to `5021` and is serving HTTP over TLS
+
+## Misc
+
+Send signal `SIGUSR1` to change log level between info and debug.
