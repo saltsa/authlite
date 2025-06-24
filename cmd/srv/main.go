@@ -127,8 +127,8 @@ func setMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		start := time.Now()
 
+		start := time.Now()
 		ctx := r.Context()
 
 		if ip, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
@@ -153,12 +153,11 @@ func setMiddleware(next http.Handler) http.Handler {
 		}
 
 		ctx = context.WithValue(ctx, constants.CtxUserAgent, r.UserAgent())
-
 		newReq := r.WithContext(ctx)
 		next.ServeHTTP(w, newReq)
 		end := time.Now()
 
-		logger.Printf("%s %s (ms=%d)", r.Method, r.RequestURI, end.Sub(start).Milliseconds())
+		slog.InfoContext(ctx, fmt.Sprintf("%s %s %s", r.Method, r.RequestURI, r.UserAgent()), "ms", end.Sub(start).Milliseconds())
 	})
 
 	return handler
@@ -183,7 +182,6 @@ func loginBeginHandler(w http.ResponseWriter, r *http.Request) {
 	applog.LogAuditEvent(ctx, applog.AuditNewChallenge, "new challenge created")
 
 	cu.AddSessionData(sessionData)
-
 	cookie := &http.Cookie{
 		Name:     cookieName,
 		Value:    cu.ID.String(),
@@ -192,7 +190,6 @@ func loginBeginHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Path:     "/login",
 	}
-
 	http.SetCookie(w, cookie)
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(http.StatusOK)

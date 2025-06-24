@@ -2,14 +2,12 @@ package applog
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/saltsa/authlite/internal/constants"
 )
@@ -65,12 +63,13 @@ func GetLogger() *log.Logger {
 }
 
 func LogAuditEvent(ctx context.Context, op AuditOperation, msg string, args ...any) {
-	func() {
-		start := time.Now()
-		defer func() {
-			fmt.Printf("log took %s\n", time.Since(start))
-		}()
-	}()
+	// Code to test and ensure logging is done enough quickly
+	// func() {
+	// 	start := time.Now()
+	// 	defer func() {
+	// 		fmt.Printf("log took %s\n", time.Since(start))
+	// 	}()
+	// }()
 	args = append(args, auditAttrs(op))
 	slogger.InfoContext(ctx, msg, args...)
 }
