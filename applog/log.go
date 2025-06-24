@@ -58,13 +58,6 @@ func GetLogger() *log.Logger {
 }
 
 func LogAuditEvent(ctx context.Context, op AuditOperation, msg string, args ...any) {
-	// Code to test and ensure logging is done enough quickly
-	// func() {
-	// 	start := time.Now()
-	// 	defer func() {
-	// 		fmt.Printf("log took %s\n", time.Since(start))
-	// 	}()
-	// }()
 	args = append(args, auditAttrs(op))
 	slogger.InfoContext(ctx, msg, args...)
 }
