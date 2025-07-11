@@ -4,12 +4,12 @@ import (
 	"encoding/base64"
 	"encoding/csv"
 	"io"
+	"io/fs"
 	"log"
 	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
-	"github.com/saltsa/authlite"
 )
 
 type Credential struct {
@@ -31,8 +31,8 @@ func (c Credential) GetIDAndPublicKey() ([]byte, []byte) {
 
 // Reads users from CSV, expected format:
 // user_id string uuid, key id base64, public key base64
-func ReadUsers() (map[uuid.UUID][]Credential, error) {
-	r, err := authlite.FSRoot.Open("users.csv")
+func ReadUsers(fsRoot fs.FS) (map[uuid.UUID][]Credential, error) {
+	r, err := fsRoot.Open("users.csv")
 	if err != nil {
 		return nil, err
 	}

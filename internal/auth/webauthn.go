@@ -8,12 +8,15 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
+	"github.com/saltsa/authlite"
 	"github.com/saltsa/authlite/applog"
 	"github.com/saltsa/authlite/configreader"
 	"github.com/saltsa/authlite/internal/util"
 )
 
 var logger = applog.GetLogger()
+
+const authenticationTimeout = 5 * time.Minute
 
 func WebauthConfig() *webauthn.WebAuthn {
 	rpID := util.MustGetEnv("RPID")
@@ -34,13 +37,13 @@ func WebauthConfig() *webauthn.WebAuthn {
 		Timeouts: webauthn.TimeoutsConfig{
 			Login: webauthn.TimeoutConfig{
 				Enforce:    true,
-				Timeout:    5 * time.Minute,
-				TimeoutUVD: 5 * time.Minute,
+				Timeout:    authenticationTimeout,
+				TimeoutUVD: authenticationTimeout,
 			},
 			Registration: webauthn.TimeoutConfig{
 				Enforce:    true,
-				Timeout:    5 * time.Minute,
-				TimeoutUVD: 5 * time.Minute,
+				Timeout:    authenticationTimeout,
+				TimeoutUVD: authenticationTimeout,
 			},
 		},
 	})
@@ -92,7 +95,7 @@ var users map[uuid.UUID][]configreader.Credential
 
 func ReadUsers() {
 	var err error
-	users, err = configreader.ReadUsers()
+	users, err = configreader.ReadUsers(authlite.FSRoot)
 	if err != nil {
 		panic(err)
 	}

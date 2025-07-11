@@ -3,6 +3,9 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -25,6 +28,16 @@ type ChallengeEntry struct {
 }
 
 func (cu *ChallengeEntry) AddSessionData(sd *webauthn.SessionData) {
+	slog.Debug("adding sesssion data",
+		"challenge", sd.Challenge,
+		"rp", sd.RelyingPartyID,
+		"userId", b64(sd.UserID),
+		"numOfCredentials", len(sd.AllowedCredentialIDs),
+		"expires", sd.Expires.String(),
+		"userVerification", sd.UserVerification,
+		"extensionLength", len(sd.Extensions),
+		"credentialParameters", jsonOutput(sd.CredParams),
+	)
 	cu.sessionData = sd
 }
 
@@ -102,8 +115,17 @@ func init() {
 			lock.Unlock()
 
 			if count > 0 {
-				logger.Printf("removed expired challenges %d of %d total. Operation was done in %s", count, total, time.Since(start))
+				slog.Info("removed expired challenges", "removed", count, "totalBeforeRemove", total, "duration", time.Since(start))
 			}
 		}
 	}()
+}
+
+func b64(data []byte) string {
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func jsonOutput(data any) string {
+	b, _ := json.Marshal(data)
+	return string(b)
 }

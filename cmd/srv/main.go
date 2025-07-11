@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -24,18 +25,17 @@ import (
 	"github.com/saltsa/authlite/internal/auth"
 	"github.com/saltsa/authlite/internal/constants"
 	"github.com/saltsa/authlite/internal/util"
-
-	_ "github.com/joho/godotenv/autoload"
 )
 
 const cookieName = "al_session_id"
 
-var logger = applog.GetLogger()
+var logger *log.Logger
 
 var w6nConfig *webauthn.WebAuthn
 
 func main() {
-
+	applog.SetupLogging()
+	logger = applog.GetLogger()
 	auth.ReadUsers()
 	w6nConfig = auth.WebauthConfig()
 
@@ -116,11 +116,7 @@ func respondError(w http.ResponseWriter, status int, msg string, err error) {
 
 func setMiddleware(next http.Handler) http.Handler {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Printf("--- request method=%s uri=%s host=%s remote=%s", r.Method, r.RequestURI, r.Host, r.RemoteAddr)
-		for hdr := range r.Header {
-			logger.Printf("%s -> %s", hdr, r.Header.Get(hdr))
-		}
-		logger.Printf("--- header list end")
+		logger.Printf("%s %s %s %s", r.Method, r.RequestURI, r.Host, r.RemoteAddr)
 
 		// skip get and options methods as we're not interested about them
 		if r.Method == http.MethodGet || r.Method == http.MethodOptions {

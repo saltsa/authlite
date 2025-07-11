@@ -7,13 +7,19 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
+	_ "github.com/joho/godotenv/autoload"
 	"github.com/saltsa/authlite/internal/constants"
 )
 
 var logger *log.Logger
 var slogger *slog.Logger
+
+var currentLogLevel = &slog.LevelVar{}
+
+var lock sync.Mutex
 
 type AuditOperation string
 
@@ -24,36 +30,52 @@ const (
 )
 
 func init() {
-	level := &slog.LevelVar{}
-	level.UnmarshalText([]byte(os.Getenv("LOG_LEVEL")))
+	SetupLogging()
+}
+
+func SetupLogging() {
+	lock.Lock()
+	defer lock.Unlock()
+	if logger != nil && slogger != nil {
+		return
+	}
+	currentLogLevel.UnmarshalText([]byte(os.Getenv("LOG_LEVEL")))
+
 	handler := newLogHandler(os.Stderr, &slog.HandlerOptions{
-		Level: level,
+		Level: currentLogLevel,
 	})
 	slogger = slog.New(handler)
 	logger = slog.NewLogLogger(handler, slog.LevelDebug)
 	slog.SetDefault(slogger)
 
-	slog.Info("logging initialized", "level", level)
+	slog.Info("logging initialized", "currentLevel", currentLogLevel)
 
 	// support dynamic level changes with SIGUSR1 signal
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGUSR1)
 
 	go func() {
-		for sig := range sigs {
-			var newLevel slog.Level
-			if level.Level() == slog.LevelDebug {
-				newLevel = slog.LevelInfo
-			} else {
-				newLevel = slog.LevelDebug
-			}
-			slog.Info("changing log levels", "signal", sig.String(), "newLevel", newLevel, "oldLevel", level)
-			level.Set(newLevel)
+		for range sigs {
+			changeLogLevel()
 		}
 	}()
 }
 
+func changeLogLevel() {
+	var newLevel slog.Level
+	if currentLogLevel.Level() == slog.LevelDebug {
+		newLevel = slog.LevelInfo
+	} else {
+		newLevel = slog.LevelDebug
+	}
+	slog.Info("changing log levels", "newLevel", newLevel, "oldLevel", currentLogLevel)
+	currentLogLevel.Set(newLevel)
+}
+
 func GetLogger() *log.Logger {
+	if logger == nil {
+		SetupLogging()
+	}
 	return logger
 }
 
